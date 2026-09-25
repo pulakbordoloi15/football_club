@@ -53,6 +53,10 @@ class PlayerRepository @Inject()(db:Database)(implicit ec:ExecutionContext) {
     player.copy(id=generatedId)
   }
 
+  def findByNameExcludingId(name:String,excludeId:Long,clubId:Long) :Future[Option[Player]]=Future{
+    ctx.run(playersTable.filter(p=> p.name ==lift(name) && (p.clubId==lift(clubId) && (!p.id.contains(lift(excludeId)))))).headOption
+  }
+
   def update(id:Long, player:Player):Future[Option[Player]]= Future{
     val count=ctx.run(
       playersTable.filter(_.id.contains(lift(id))).update(

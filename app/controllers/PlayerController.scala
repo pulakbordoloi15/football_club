@@ -59,43 +59,48 @@ class PlayerController @Inject()(cc: ControllerComponents, playerRepo: PlayerRep
   }
 
   def update(id: Long): Action[JsValue] = Action.async(parse.json) { request =>
-      request.body.validate[Player] match {
-        case JsError(errors) => Future.successful(BadRequest(JsError.toJson(errors)))
-        case JsSuccess(player, _) =>
-          validatePlayer(player) match {
-            case Left(error) =>
-              Future.successful(BadRequest(Json.obj("error" -> errorToMessage(error))))
-            case Right(validPlayer) =>
-              playerRepo.update(id, player).map {
-                case Some(updated) => Ok(Json.toJson(updated))
-                case None => NotFound(Json.obj("error" -> s"Player with id $id not found"))
-              }
-
-          }
-      }
-    }
-
-    def delete(id: Long): Action[AnyContent] = Action.async {
-      playerRepo.delete(id).map {
-        case true => NoContent
-        case false => NotFound(Json.obj("error" -> s"Player $id not found"))
-      }
-    }
-
-    def validatePlayer(player: Player): Either[PlayerError, Player] = {
-      if (player.name.trim.isEmpty) Left(EmptyName)
-      else if (player.age < 0 || player.age > 100) Left(InvalidAge(player.age))
-      else if (player.position.trim.isEmpty) Left(EmptyPosition)
-      else if (player.nationality.trim.isEmpty) Left(EmptyNationality)
-      else
-        Right(player)
-    }
-
-    def errorToMessage(error: PlayerError): String = error match {
-      case EmptyName => "Name cannot be empty"
-      case InvalidAge(age) => s"Age $age is invalid (must be 0-100)"
-      case EmptyPosition => "Position cannot be empty"
-      case EmptyNationality => "Nationality cannot be empty"
-      case DuplicatePlayer(n, c) => s"Player '$n' already exists in club $c"
+    request.body.validate[Player] match {
+      case JsError(errors) => Future.successful(BadRequest(JsError.toJson(errors)))
+      case JsSuccess(player, _) =>
+        validatePlayer(player) match {
+          case Left(error) =>
+            Future.successful(BadRequest(Json.obj("error" -> errorToMessage(error))))
+          case Right(validPlayer) =>
+            playerRepo.findByNameExcludingId(validPlayer.name, id, validPlayer.clubId).flatMap {
+              case Some(_) =>
+                Future.successful(BadRequest(Json.obj("error" ->
+                  errorToMessage(DuplicatePlayer(validPlayer.name, validPlayer.clubId)))))
+              case None =>
+                playerRepo.update(id, player).map {
+                  case Some(updated) => Ok(Json.toJson(updated))
+                  case None => NotFound(Json.obj("error" -> s"Player with id $id not found"))
+                }
+            }
+        }
     }
   }
+
+  def delete(id: Long): Action[AnyContent] = Action.async {
+    playerRepo.delete(id).map {
+      case true => NoContent
+      case false => NotFound(Json.obj("error" -> s"Player $id not found"))
+    }
+  }
+
+  def validatePlayer(player: Player): Either[PlayerError, Player] = {
+    if (player.name.trim.isEmpty) Left(EmptyName)
+    else if (player.age < 0 || player.age > 100) Left(InvalidAge(player.age))
+    else if (player.position.trim.isEmpty) Left(EmptyPosition)
+    else if (player.nationality.trim.isEmpty) Left(EmptyNationality)
+    else
+      Right(player)
+  }
+
+  def errorToMessage(error: PlayerError): String = error match {
+    case EmptyName => "Name cannot be empty"
+    case InvalidAge(age) => s"Age $age is invalid (must be 0-100)"
+    case EmptyPosition => "Position cannot be empty"
+    case EmptyNationality => "Nationality cannot be empty"
+    case DuplicatePlayer(n, c) => s"Player '$n' already exists in club $c"
+  }
+}

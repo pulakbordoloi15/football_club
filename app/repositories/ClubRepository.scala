@@ -51,6 +51,10 @@ class ClubRepository @Inject()(db: Database)(implicit ec: ExecutionContext) {
     ctx.run(clubsTable.filter(_.id.contains(lift(id)))).headOption
   }
 
+  def findByName(name:String):Future[Option[Club]]= Future{
+    ctx.run(clubsTable.filter(p=>p.name==lift(name))).headOption
+  }
+
   def create(club: Club): Future[Club] = Future {
     val generatedId = ctx.run(
       clubsTable.insert(
@@ -61,6 +65,10 @@ class ClubRepository @Inject()(db: Database)(implicit ec: ExecutionContext) {
       ).returningGenerated(_.id) // get the auto-generated id back
     )
     club.copy(id = generatedId) //return club with the new id
+  }
+
+  def findByNameExcludingId(name:String, excludeId:Long):Future[Option[Club]]=Future{
+    ctx.run(clubsTable.filter(p=>p.name==lift(name) && (!p.id.contains(lift(excludeId))))).headOption
   }
 
   def update(id: Long, club: Club): Future[Option[Club]] = Future {

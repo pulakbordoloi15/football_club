@@ -47,9 +47,15 @@ class ClubController @Inject()(cc: ControllerComponents, clubRepo: ClubRepositor
       case JsSuccess(club, _) =>
         validateClub(club) match {
           case Left(error)=>
-            Future.successful(BadRequest(Json.obj("error"-> errorToMessage(error)))
-          case Right(club)=>
-            clubRepo.create(club).map(created => Created(Json.toJson(created)))
+            Future.successful(BadRequest(Json.obj("error"-> errorToMessage(error))))
+          case Right(validClub)=>
+            clubRepo.findByName(validClub.name).flatMap{
+              case Some(_)=>
+                Future.successful(BadRequest(Json.obj("error"-> errorToMessage(DuplicateClub(validClub.name)))))
+              case None=>
+                clubRepo.create(validClub).map(created => Created(Json.toJson(created)))
+
+            }
         }
     }
   }
@@ -57,9 +63,22 @@ class ClubController @Inject()(cc: ControllerComponents, clubRepo: ClubRepositor
   def update(id: Long): Action[JsValue] = Action.async(parse.json) { request =>
     request.body.validate[Club] match {
       case JsError(errors) => Future.successful(BadRequest(JsError.toJson(errors)))
-      case JsSuccess(club,_) => clubRepo.update(id, club).map {
-        case Some(updated) => Ok(Json.toJson(updated))
-        case None => NotFound(Json.obj("error" -> s"Club with id $id not found"))
+      case JsSuccess(club,_) =>
+      validateClub(club) match {
+        case Left(error)=>
+          Future.successful(BadRequest(Json.obj("error"-> errorToMessage(error))))
+        case Right(validClub)=>
+          clubRepo.findByNameExcludingId(validClub.name,id).flatMap{
+            case Some(_)=>
+              Future.successful(BadRequest(Json.obj("error"-> errorToMessage(DuplicateClub(validClub.name)))))
+            case None=>
+              clubRepo.update(id, validClub).map {
+                case Some(updated) => Ok(Json.toJson(updated))
+                case None => NotFound(Json.obj("error" -> s"Club with id $id not found"))
+
+          }
+      }
+
       }
     }
   }
@@ -83,7 +102,7 @@ class ClubController @Inject()(cc: ControllerComponents, clubRepo: ClubRepositor
 
   def validateClub(club:Club):Either[ClubError,Club]= {
     if(club.name.trim.isEmpty) Left(EmptyName)
-    else if (club.foundedYear < 0) Left(InvalidFoundedYear(club.foundedYear))
+    else if (club.foundedYear < 1800 || club.foundedYear>2027) Left(InvalidFoundedYear(club.foundedYear))
     else if (club.city.trim.isEmpty) Left(EmptyCity)
     else
       Right(club)
@@ -92,9 +111,9 @@ class ClubController @Inject()(cc: ControllerComponents, clubRepo: ClubRepositor
 
   def errorToMessage(error: ClubError): String = error match {
     case EmptyName => "Name cannot be empty"
-    case InvalidFoundedYear(year) => s"Age $year is invalid (must be 0-100)"
-    case EmptyCity => "Position cannot be empty"
-    case DuplicateClub(n, c) => s"Player '$n' already exists in club $c"
+    case InvalidFoundedYear(year) => s"Founded year $year is invalid "
+    case EmptyCity => "City cannot be empty"
+    case DuplicateClub(c) => s"Club '$c' already exists"
   }
 
 
