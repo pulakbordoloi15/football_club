@@ -23,11 +23,11 @@ class ClubController @Inject()(cc: ControllerComponents, clubRepo: ClubRepositor
     clubRepo.findAll().map(clubs => Ok(Json.toJson(clubs)))
   }
 
-//  What .map() does
-//.map() transforms the value inside a Future:
+  //  What .map() does
+  //.map() transforms the value inside a Future:
 
-//    Future[X].map(x => Y)  →  Future[Y]
-//  Whatever you return inside .map() gets wrapped in a new Future.
+  //    Future[X].map(x => Y)  →  Future[Y]
+  //  Whatever you return inside .map() gets wrapped in a new Future.
 
   def getById(id: Long): Action[AnyContent] = Action.async {
     clubRepo.findById(id).map {
@@ -38,24 +38,26 @@ class ClubController @Inject()(cc: ControllerComponents, clubRepo: ClubRepositor
     }
   }
 
-//  What .flatMap() does
-//.flatMap() is the same as .map() but it flattens nested Futures:
+  //  What .flatMap() does
+  //.flatMap() is the same as .map() but it flattens nested Futures:
 
   def create: Action[JsValue] = Action.async(parse.json) { request =>
     request.body.validate[Club] match {
       case JsError(errors) => Future.successful(BadRequest(JsError.toJson(errors)))
       case JsSuccess(club, _) =>
         validateClub(club) match {
-          case Left(error)=>
-            Future.successful(BadRequest(Json.obj("error"-> errorToMessage(error))))
-          case Right(validClub)=>
-            clubRepo.findByName(validClub.name).flatMap{
-              case Some(_)=>
-                Future.successful(BadRequest(Json.obj("error"-> errorToMessage(DuplicateClub(validClub.name)))))
-              case None=>
-                clubRepo.create(validClub).map(created => Created(Json.toJson(created)))
-
-            }
+          case Left(error) =>
+            Future.successful(BadRequest(Json.obj("error" -> errorToMessage(error))))
+          case Right(validClub) =>
+            for {
+              existing <- clubRepo.findByName(validClub.name)
+              result <- existing match {
+                case Some(_) =>
+                  Future.successful(BadRequest(Json.obj("error" -> errorToMessage(DuplicateClub(validClub.name)))))
+                case None =>
+                  clubRepo.create(validClub).map(created => Created(Json.toJson(created)))
+              }
+            } yield result
         }
     }
   }
@@ -63,46 +65,50 @@ class ClubController @Inject()(cc: ControllerComponents, clubRepo: ClubRepositor
   def update(id: Long): Action[JsValue] = Action.async(parse.json) { request =>
     request.body.validate[Club] match {
       case JsError(errors) => Future.successful(BadRequest(JsError.toJson(errors)))
-      case JsSuccess(club,_) =>
-      validateClub(club) match {
-        case Left(error)=>
-          Future.successful(BadRequest(Json.obj("error"-> errorToMessage(error))))
-        case Right(validClub)=>
-          clubRepo.findByNameExcludingId(validClub.name,id).flatMap{
-            case Some(_)=>
-              Future.successful(BadRequest(Json.obj("error"-> errorToMessage(DuplicateClub(validClub.name)))))
-            case None=>
-              clubRepo.update(id, validClub).map {
-                case Some(updated) => Ok(Json.toJson(updated))
-                case None => NotFound(Json.obj("error" -> s"Club with id $id not found"))
+      case JsSuccess(club, _) =>
+        validateClub(club) match {
+          case Left(error) =>
+            Future.successful(BadRequest(Json.obj("error" -> errorToMessage(error))))
+          case Right(validClub) =>
 
-          }
-      }
-
-      }
-    }
-  }
-
-  def delete(id: Long): Action[AnyContent] = Action.async {
-    clubRepo.delete(id).map{
-      case true  => NoContent
-      case false => NotFound(Json.obj("error" -> s"Club $id not found"))
-    }
-  }
-
-  def getWithPlayers(id:Long):Action[AnyContent]= Action.async {
-    clubRepo.findById(id).flatMap{
-      case None =>Future.successful(NotFound(Json.obj("error"->s"Club with id $id not found")))
-      case Some(club)=>
-        playerRepo.findByClubId(id).map{
-          players=> Ok(Json.toJson(ClubWithPlayers(club,players)))
+            for {
+              existing <- clubRepo.findByNameExcludingId(validClub.name, id)
+              result <- existing match {
+                case Some(_) =>
+                  Future.successful(BadRequest(Json.obj("error" -> errorToMessage(DuplicateClub(validClub.name)))))
+                case None =>
+                  clubRepo.update(id, validClub).map {
+                    case Some(updated) => Ok(Json.toJson(updated))
+                    case None => NotFound(Json.obj("error" -> s"Club with id $id not found"))
+                  }
+              }
+            } yield result
         }
     }
   }
 
-  def validateClub(club:Club):Either[ClubError,Club]= {
-    if(club.name.trim.isEmpty) Left(EmptyName)
-    else if (club.foundedYear < 1800 || club.foundedYear>2027) Left(InvalidFoundedYear(club.foundedYear))
+  def delete(id: Long): Action[AnyContent] = Action.async {
+    clubRepo.delete(id).map {
+      case true => NoContent
+      case false => NotFound(Json.obj("error" -> s"Club $id not found"))
+    }
+  }
+
+  def getWithPlayers(id: Long): Action[AnyContent] = Action.async {
+    val futClub = clubRepo.findById(id)
+    val futPlayer = playerRepo.findByClubId(id)
+    for {
+      maybeClub <- futClub
+      players <- futPlayer
+    } yield maybeClub match {
+      case None => NotFound(Json.obj("error" -> s"Club not found for id $id"))
+      case Some(club) => Ok(Json.toJson(ClubWithPlayers(club, players)))
+    }
+  }
+
+  def validateClub(club: Club): Either[ClubError, Club] = {
+    if (club.name.trim.isEmpty) Left(EmptyName)
+    else if (club.foundedYear < 1800 || club.foundedYear > 2027) Left(InvalidFoundedYear(club.foundedYear))
     else if (club.city.trim.isEmpty) Left(EmptyCity)
     else
       Right(club)

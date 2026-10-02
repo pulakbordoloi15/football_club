@@ -45,15 +45,19 @@ class PlayerController @Inject()(cc: ControllerComponents, playerRepo: PlayerRep
           case Left(error) =>
             Future.successful(BadRequest(Json.obj("error" -> errorToMessage(error))))
           case Right(validPlayer) =>
-            playerRepo.findByNameAndClubId(validPlayer.name, validPlayer.clubId).flatMap {
-              case Some(_) =>
-                Future.successful(BadRequest(Json.obj("error" ->
-                  errorToMessage(DuplicatePlayer(validPlayer.name, validPlayer.clubId)))))
-              case None => clubRepo.findById(validPlayer.clubId).flatMap {
-                case Some(_) => playerRepo.create(validPlayer).map(created => Created(Json.toJson(created)))
-                case None => Future.successful(BadRequest(Json.obj("error" -> s"Club ${validPlayer.clubId} not found")))
+
+            for {
+              existing <- playerRepo.findByNameAndClubId(validPlayer.name, validPlayer.clubId)
+              result <- existing match {
+                case Some(_) =>
+                  Future.successful(BadRequest(Json.obj("error" ->
+                    errorToMessage(DuplicatePlayer(validPlayer.name, validPlayer.clubId)))))
+                case None => clubRepo.findById(validPlayer.clubId).flatMap {
+                  case Some(_) => playerRepo.create(validPlayer).map(created => Created(Json.toJson(created)))
+                  case None => Future.successful(BadRequest(Json.obj("error" -> s"Club ${validPlayer.clubId} not found")))
+                }
               }
-            }
+            } yield result
         }
     }
   }
@@ -66,16 +70,19 @@ class PlayerController @Inject()(cc: ControllerComponents, playerRepo: PlayerRep
           case Left(error) =>
             Future.successful(BadRequest(Json.obj("error" -> errorToMessage(error))))
           case Right(validPlayer) =>
-            playerRepo.findByNameExcludingId(validPlayer.name, id, validPlayer.clubId).flatMap {
-              case Some(_) =>
-                Future.successful(BadRequest(Json.obj("error" ->
-                  errorToMessage(DuplicatePlayer(validPlayer.name, validPlayer.clubId)))))
-              case None =>
-                playerRepo.update(id, player).map {
-                  case Some(updated) => Ok(Json.toJson(updated))
-                  case None => NotFound(Json.obj("error" -> s"Player with id $id not found"))
-                }
-            }
+            for{
+              existing<-playerRepo.findByNameExcludingId(validPlayer.name, id, validPlayer.clubId)
+              result<- existing match {
+                case Some(_) =>
+                  Future.successful(BadRequest(Json.obj("error" ->
+                    errorToMessage(DuplicatePlayer(validPlayer.name, validPlayer.clubId)))))
+                case None =>
+                  playerRepo.update(id, player).map {
+                    case Some(updated) => Ok(Json.toJson(updated))
+                    case None => NotFound(Json.obj("error" -> s"Player with id $id not found"))
+                  }
+              }
+            } yield  result
         }
     }
   }
