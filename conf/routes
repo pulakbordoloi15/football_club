@@ -23,6 +23,7 @@ GET     /api/players/:id            controllers.PlayerController.getById(id: Lon
 PUT     /api/players/:id            controllers.PlayerController.update(id: Long)
 DELETE  /api/players/:id             controllers.PlayerController.delete(id: Long)
 
+GET      /api/matches/count        controllers.MatchController.getCount()
 GET      /api/matches              controllers.MatchController.getAll()
 POST     /api/matches/create             controllers.MatchController.create()
 PUT     /api/matches/update/:id         controllers.MatchController.update(id:Long)

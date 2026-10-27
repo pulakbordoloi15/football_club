@@ -6,6 +6,7 @@ import models.MatchStatus.Scheduled
 import play.api.libs.json.{JsError, JsSuccess, JsValue, Json}
 import play.api.mvc.{AbstractController, Action, AnyContent, ControllerComponents}
 import repositories.{ClubRepository, MatchRepository}
+import services.{CounterService, NotificationService}
 
 import java.time.Instant
 import javax.inject.{Inject, Singleton}
@@ -13,7 +14,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 
 @Singleton
-class MatchController @Inject()(cc: ControllerComponents, matchRepo: MatchRepository, clubRepo: ClubRepository)(implicit ec: ExecutionContext) extends AbstractController(cc) {
+class MatchController @Inject()(cc: ControllerComponents, matchRepo: MatchRepository, clubRepo: ClubRepository,notificationService: NotificationService,counterService: CounterService)(implicit ec: ExecutionContext) extends AbstractController(cc) {
 
   //  - getAll() — simple, no validation
   //    - getById(id)
@@ -61,13 +62,16 @@ class MatchController @Inject()(cc: ControllerComponents, matchRepo: MatchReposi
               result <- (mayBeHomeClub, mayBeAwayClub) match {
                 case (_, None) => Future.successful(BadRequest(Json.obj("errors" -> errorToMessage(AwayClubNotFound(m.awayClubId)))))
                 case (None, _) => Future.successful(BadRequest(Json.obj("errors" -> errorToMessage(HomeClubNotFound(m.homeClubId)))))
-                case (Some(_), Some(_)) => matchRepo.create(validMatch).map { created => Created(Json.toJson(created)) }
+                case (Some(_), Some(_)) => matchRepo.create(validMatch).map { created =>
+                  notificationService.matchCreated(created.id.getOrElse(0L),created.venue)
+                  counterService.increment()
+                  Created(Json.toJson(created)) }
               }
             } yield result
         }
     }
   }
-  //Sometime itis used to show eerors as json.obj sometimes json.toJson
+  //Sometime it is used to show errors as json.obj sometimes json.toJson
 
   def update(id: Long): Action[JsValue] = Action.async(parse.json) { request =>
     request.body.validate[Match] match {
@@ -99,6 +103,12 @@ class MatchController @Inject()(cc: ControllerComponents, matchRepo: MatchReposi
     matchRepo.delete(id).map {
       case true => NoContent
       case false => NotFound(Json.obj("errors" -> s"The match with id $id is not present "))
+    }
+  }
+
+  def getCount():Action[AnyContent]=Action.async{
+    counterService.getCount().map {n=>
+      Ok(Json.obj("count"->n))
     }
   }
 
