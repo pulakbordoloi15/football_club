@@ -26,6 +26,8 @@ DELETE  /api/players/:id             controllers.PlayerController.delete(id: Lon
 GET      /api/matches/count        controllers.MatchController.getCount()
 GET      /api/matches              controllers.MatchController.getAll()
 POST     /api/matches/create             controllers.MatchController.create()
+POST  /api/matches/:id/start       controllers.MatchController.startMatch(id: Long)
+GET   /api/matches/:id/live        controllers.MatchController.getLive(id: Long)
 PUT     /api/matches/update/:id         controllers.MatchController.update(id:Long)
 GET      /api/matches/:id          controllers.MatchController.getById(id:Long)
 GET  /api/matches/clubs/:clubId   controllers.MatchController.getByClubId(clubId:Long)

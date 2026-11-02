@@ -6,7 +6,7 @@ import models.MatchStatus.Scheduled
 import play.api.libs.json.{JsError, JsSuccess, JsValue, Json}
 import play.api.mvc.{AbstractController, Action, AnyContent, ControllerComponents}
 import repositories.{ClubRepository, MatchRepository}
-import services.{CounterService, NotificationService}
+import services.{CounterService, MatchSimulatorService, NotificationService}
 
 import java.time.Instant
 import javax.inject.{Inject, Singleton}
@@ -14,7 +14,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 
 @Singleton
-class MatchController @Inject()(cc: ControllerComponents, matchRepo: MatchRepository, clubRepo: ClubRepository,notificationService: NotificationService,counterService: CounterService)(implicit ec: ExecutionContext) extends AbstractController(cc) {
+class MatchController @Inject()(cc: ControllerComponents, matchRepo: MatchRepository, clubRepo: ClubRepository,notificationService: NotificationService,counterService: CounterService,matchSimulatorService: MatchSimulatorService)(implicit ec: ExecutionContext) extends AbstractController(cc) {
 
   //  - getAll() — simple, no validation
   //    - getById(id)
@@ -110,6 +110,22 @@ class MatchController @Inject()(cc: ControllerComponents, matchRepo: MatchReposi
     counterService.getCount().map {n=>
       Ok(Json.obj("count"->n))
     }
+  }
+
+  def startMatch(matchId:Long):Action[AnyContent]=Action {
+   matchSimulatorService.startMatch(matchId)
+    Accepted(Json.obj("message"->s"Match $matchId started "))
+  }
+
+  //Decision rule
+  //▎ Have a Scala object with Writes? → Json.toJson(obj)
+  //▎ Building a small ad-hoc shape? → Json.obj(k -> v)
+
+  def getLive(matchId:Long):Action[AnyContent]=Action.async {
+matchSimulatorService.getLive(matchId).map {
+  case Some(state)=>Ok(Json.toJson(state))
+  case None=>NotFound(Json.obj("error"->s"Match"))
+}
   }
 
   def validateMatch(m: Match): Either[MatchError, Match] = {

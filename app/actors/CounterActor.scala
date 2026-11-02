@@ -18,18 +18,22 @@ import org.apache.pekko.actor.typed.{ActorRef, Behavior}
 // ═══════════════════════════════════════════════════════════════════════
 object CounterActor {
 
-  // ─── Message protocol ─────────────────────────────────────────────
-  // sealed trait = "the complete menu of slips this actor accepts".
-  // The compiler will stop you from sending any OTHER kind of slip.
+  // ─── What mail this actor accepts ─────────────────────────────────
+  //
+  //   Command   = the type of mail this actor accepts (the mailbox label)
+  //
+  //   Increment = letter #1 — "add one to the tally". No info needed,
+  //               so it's a case object (singleton, not a case class).
+  //
+  //   GetCount  = letter #2 — "what's the count? Reply at this address."
+  //               replyTo = the asker's mailbox (where to send the answer).
+  //               ActorRef[Int] = "a mailbox that accepts Int messages".
+  //
+  // Any other kind of mail → compile error.
   sealed trait Command
 
-  // Slip A — "add one to the tally". No data needed, so case object.
-  case object Increment extends Command
-
-  // Slip B — "what's the current count? Reply at this address".
-  // replyTo = the asker's mailbox (where to drop the reply).
-  // ActorRef[Int] = "a mailbox that accepts Int messages".
-  case class GetCount(replyTo: ActorRef[Int]) extends Command
+  case object Increment                      extends Command   //message
+  case class  GetCount(replyTo: ActorRef[Int]) extends Command  //message
 
   // ─── Starting behavior ───────────────────────────────────────────
   // Pekko calls apply() to create the actor. It starts with count = 0.
@@ -44,7 +48,7 @@ object CounterActor {
   //
   // This is how actors stay thread-safe WITHOUT locks: state only lives
   // inside the behavior, which the actor replaces one message at a time.
-  private def counter(count: Int): Behavior[Command] =
+  private def counter(count: Int): Behavior[Command] =               // STATE lives in the `count` parameter
     Behaviors.receive { (context, message) =>
       message match {
 

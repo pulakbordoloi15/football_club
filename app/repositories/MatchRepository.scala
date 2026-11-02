@@ -89,6 +89,17 @@ lazy val ctx= new MysqlJdbcContext(SnakeCase,db.dataSource.asInstanceOf[javax.sq
 
     if(count > 0) Some(m.copy(id=Some((id)))) else None
   }
+
+  def updateScore(id:Long,homeScore:Int,awayScore:Int,status: MatchStatus):Future[Boolean]=Future {
+    val count=ctx.run(
+      matchTable.filter(_.id.contains((lift(id)))).update(
+        _.homeScore->lift(Option(homeScore)),
+        _.awayScore->lift(Option(awayScore)),
+        _.status->lift(status:MatchStatus)
+      )
+    )
+    count > 0
+  }
   def delete(id: Long): Future[Boolean]= Future{
     val count = ctx.run(matchTable.filter(_.id.contains(lift(id))).delete)
     count>0

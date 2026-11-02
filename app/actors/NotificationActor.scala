@@ -24,14 +24,27 @@ import org.apache.pekko.actor.typed.scaladsl.Behaviors
 // ═══════════════════════════════════════════════════════════════════════
 object NotificationActor {
 
-  // ─── Message protocol ─────────────────────────────────────────────
-  // sealed trait = "the complete menu of slips this actor accepts".
-  // Compiler blocks any other type → safer than classic (untyped) actors.
+  // ─── What mail this actor accepts ─────────────────────────────────
+  //
+  //   Command       = the type of mail this actor accepts
+  //                   (the "mailbox label")
+  //
+  //   MatchCreated  = one specific letter.
+  //                   It says `extends Command` so the actor accepts it.
+  //
+  // The actor says: "I only accept Command-type mail."
+  //
+  // So when you send:
+  //     notifActor ! MatchCreated(42, "Wembley")
+  //   → You're sending a letter. It qualifies as Command-mail. Accepted.
+  //
+  // If you tried:
+  //     notifActor ! "random string"
+  //   → Compile error. A String is NOT Command-mail.
   sealed trait Command
 
-  // Only one kind of slip right now. We can add more later (MatchUpdated,
-  // MatchDeleted) — all extending Command.
-  case class MatchCreated(matchId: Long, venue: String) extends Command
+  case class MatchCreated(matchId: Long, venue: String) extends Command  //message
+  //Each message arrives → gets logged → forgotten. The actor remembers nothing between messages.
 
   // ─── The behavior ────────────────────────────────────────────────
   // Behaviors.setup runs ONCE when the actor is first created.
