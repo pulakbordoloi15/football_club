@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Live Match</title>
+    <style>
+        body {
+          background: #111;
+          color: #fff;
+          font-family: -apple-system, system-ui, sans-serif;
+          display: flex; align-items: center; justify-content: center;
+          height: 100vh; margin: 0;
+        }
+        .card {
+          background: #1e1e1e;
+          padding: 40px 60px;
+          border-radius: 16px;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+          text-align: center;
+          min-width: 520px;
+        }
+        .status {
+          font-size: 14px;
+          letter-spacing: 2px;
+          color: #ff4444;
+          font-weight: bold;
+          margin-bottom: 10px;
+        }
+        .status.finished { color: #888; }
+        .minute { font-size: 18px; color: #aaa; margin-bottom: 20px; }
+
+        .match {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 20px;
+        }
+        .team {
+          flex: 1;
+          font-size: 18px;
+          font-weight: 500;
+          color: #ddd;
+        }
+        .team.home { text-align: right; }
+        .team.away { text-align: left; }
+        .score {
+          font-size: 64px;
+          font-weight: 300;
+          white-space: nowrap;
+        }
+        .score .sep { color: #666; margin: 0 20px; }
+        .venue { font-size: 12px; color: #666; margin-top: 20px; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="status" id="status">LIVE</div>
+    <div class="minute" id="minute">Loading...</div>
+    <div class="match">
+        <div class="team home" id="homeName">Home</div>
+        <div class="score">
+            <span id="home">0</span>
+            <span class="sep">:</span>
+            <span id="away">0</span>
+        </div>
+        <div class="team away" id="awayName">Away</div>
+    </div>
+    <div class="venue" id="venue"></div>
+</div>
+
+<script>
+    const matchId = new URLSearchParams(window.location.search).get("id") || "8";
+
+    async function fetchJson(url) {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`${url} → ${r.status}`);
+      return r.json();
+    }
+
+    async function init() {
+      try {
+        // 1. Get match info
+        const match = await fetchJson(`/api/matches/${matchId}`);
+        document.getElementById("venue").textContent = match.venue.toUpperCase();
+
+        // 2. Get both club names in parallel
+        const [home, away] = await Promise.all([
+          fetchJson(`/api/clubs/${match.homeClubId}`),
+          fetchJson(`/api/clubs/${match.awayClubId}`)
+        ]);
+        document.getElementById("homeName").textContent = home.name;
+        document.getElementById("awayName").textContent = away.name;
+
+        // 3. Open WebSocket for live state
+        const ws = new WebSocket(`ws://localhost:9000/api/matches/${matchId}/live-ws`);
+
+        ws.onmessage = (event) => {
+          const s = JSON.parse(event.data);
+          document.getElementById("minute").textContent = `Minute ${s.minute}'`;
+          document.getElementById("home").textContent = s.homeScore;
+          document.getElementById("away").textContent = s.awayScore;
+          const status = document.getElementById("status");
+          status.textContent = s.status === "Finished" ? "FULL TIME" : "LIVE";
+          status.className = "status" + (s.status === "Finished" ? " finished" : "");
+        };
+
+        ws.onclose = () => {
+          const m = document.getElementById("minute");
+          if (!m.textContent.includes("Connection closed")) {
+            m.textContent += " • Connection closed";
+          }
+        };
+
+        ws.onerror = () => {
+          document.getElementById("minute").textContent = "Error connecting";
+        };
+
+      } catch (e) {
+        document.getElementById("minute").textContent = `Error: ${e.message}`;
+        console.error(e);
+      }
+    }
+
+    init();
+</script>
+</body>
+</html>
