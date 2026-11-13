@@ -2,14 +2,16 @@ package controllers
 
 import models.{Match, MatchError}
 import models.MatchError.{AwayClubNotFound, EmptyVenue, HomeClubNotFound, PastScheduledTime, SameClubs, ScoreBeforeStart}
-import models.MatchStatus.Scheduled
+import models.MatchStatus.{Finished, Scheduled}
+import org.apache.pekko.stream.scaladsl.{Source, Flow, Sink}
 import play.api.libs.json.{JsError, JsSuccess, JsValue, Json}
-import play.api.mvc.{AbstractController, Action, AnyContent, ControllerComponents}
+import play.api.mvc.{AbstractController, Action, AnyContent, ControllerComponents, WebSocket}
 import repositories.{ClubRepository, MatchRepository}
 import services.{CounterService, MatchSimulatorService, NotificationService}
 
 import java.time.Instant
 import javax.inject.{Inject, Singleton}
+import scala.concurrent.duration.DurationInt
 import scala.concurrent.{ExecutionContext, Future}
 
 
@@ -146,6 +148,20 @@ matchSimulatorService.getLive(matchId).map {
     case PastScheduledTime => "Scheduled time must be in the future"
     case EmptyVenue => "Venue cannot be empty"
     case ScoreBeforeStart => "Cannot set score before match starts"
+  }
+
+  def liveWs(id:Long):WebSocket=WebSocket.accept[String,String] {_=>
+
+    //building source(what we push to browser)
+    val outSource:Source[String,_]= {
+      Source.tick(0.seconds,1.second,"tick")
+      .mapAsync(1)(_=>matchSimulatorService.getLive(id))
+        .collect{case Some(state)=>state}
+        .takeWhile(_.status!= Finished,inclusive=true)
+        .map(state=>Json.toJson(state).toString())
+    }
+    Flow.fromSinkAndSource(Sink.ignore,outSource)
+
   }
 
 }
