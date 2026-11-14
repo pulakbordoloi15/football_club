@@ -10,8 +10,12 @@
   <import class="ch.qos.logback.core.FileAppender"/>
   <import class="ch.qos.logback.core.ConsoleAppender"/>
 
+  <!-- File path overridable via LOG_DIR env var (defaults to ./logs locally).
+       In Docker we set LOG_DIR=/tmp so writes always succeed. -->
+  <property name="LOG_DIR" value="${LOG_DIR:-${application.home:-.}/logs}"/>
+
   <appender name="FILE" class="FileAppender">
-    <file>${application.home:-.}/logs/application.log</file>
+    <file>${LOG_DIR}/application.log</file>
     <encoder class="PatternLayoutEncoder">
       <charset>UTF-8</charset>
       <pattern>%d{yyyy-MM-dd HH:mm:ss} %highlight(%-5level) %cyan(%logger{36}) %magenta(%X{pekkoSource}) %msg%n</pattern>
